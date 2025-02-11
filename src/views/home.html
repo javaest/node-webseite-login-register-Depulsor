@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Startseite</title>
+</head>
+<body onload="checkLoginStatus()">
+  <h1>Willkommen auf der Startseite</h1>
+  <div id="content"></div>
+
+  <script>
+    function checkLoginStatus() {
+      fetch('/get-username')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Nicht angemeldet');
+          }
+          return response.json();
+        })
+        .then(data => {
+          document.getElementById('content').innerHTML = `
+            <p>Willkommen, <strong>${data.username}</strong>!</p>
+            <a href="/content">Zum Inhalt</a><br>
+            <form action="/logout" method="POST">
+              <button type="submit">Abmelden</button>
+            </form>
+          `;
+        })
+        .catch(() => {
+          document.getElementById('content').innerHTML = `
+            <p>Du bist nicht angemeldet.</p>
+            <a href="/login">Login</a> | <a href="/signup">Registrieren</a>
+          `;
+        });
+    }
+  </script>
+</body>
+</html>

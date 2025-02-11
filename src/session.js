@@ -1,66 +1,102 @@
 const express = require('express');
 const session = require('express-session');
-const app = express();
 const path = require('path');
-let users = [
-  { id: 1, name: 'Alice',password:'test' },
-  { id: 2, name: 'admin',password:'password' }
+
+const app = express();
+
+let members = [
+  { name: 'Alice', password: '1234' },
+  { name: 'Alicec', password: '12345' }
 ];
-// Middleware für JSON Parsing (falls du POST-Daten benötigst)
+
+// Middleware für JSON und URL-encoded Parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Session Middleware
 app.use(session({
-  secret: 'mein-geheimer-schluessel',  // Geheimen Schlüssel für das Signieren der Session-ID
-  resave: false,                      // Verhindert, dass die Session bei jeder Anfrage zurückgesetzt wird
-  saveUninitialized: true,            // Speichert die Session auch ohne Veränderungen
-  cookie: { secure: false }           // Secure setzen, wenn du HTTPS verwendest
+  secret: 'mein-geheimer-schluessel',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { secure: false, httpOnly: true }  // httpOnly schützt vor XSS
 }));
 
+// Startseite
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'home.html'));
+});
 
-// Route für die Login-Seite
+// Login-Seite
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));  // Senden der login.html-Seite
+  res.sendFile(path.join(__dirname, 'views', 'login.html'));
 });
 
-// Endpoint 
+// Registrierungsseite
+app.get('/signup', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'signup.html'));
+});
+
+// API: Überprüft, ob der Benutzer angemeldet ist
 app.get('/get-username', (req, res) => {
-    if (req.session.user) {
-      res.json({ username: req.session.user });  // Sendet den Benutzernamen an den Client
-    } else {
-      res.status(401).json({ error: 'Nicht angemeldet' });
-    }
-  });
-  
-// Endpoint zum prüfen des Creadentials
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-    if(password=="test" && username=="admin"){
-      req.session.user = username; 
-      return res.redirect('/content');
-    }
-    
-  return res.status(401).send('Benutzername oder Passwort falsch');
-
+  if (req.session.user) {
+    res.json({ username: req.session.user });
+  } else {
+    res.status(401).json({ error: 'Nicht angemeldet' });
+  }
 });
-// Route für die "Context"-Seite nach dem Login
-app.get('/content', (req, res) => {
-  if (!req.session.user) {
-    return res.status(403).send('Zugriff verweigert. Bitte anmelden.');  // Zugriff verweigern, wenn der Benutzer nicht eingeloggt ist
+
+// Registrierungs-Handler
+app.post('/signup', (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).send('Fehler: Benutzername und Passwort sind erforderlich.');
   }
 
-  // Nach erfolgreichem Login: Anzeige der "Context"-Seite
+  // Prüfen, ob der Benutzername bereits existiert
+  if (members.some(member => member.name === username)) {
+    return res.status(409).send('Benutzername bereits vergeben.');
+  }
+
+  members.push({ name: username, password: password });
+  return res.redirect('/login');
+});
+
+// Login-Handler
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = members.find(member => member.name === username && member.password === password);
+
+  if (user) {
+    req.session.user = username;
+    return res.redirect('/content');
+  } else {
+    return res.status(401).send('Ungültige Anmeldedaten');
+  }
+});
+
+// Geschützte Seite nach Login
+app.get('/content', (req, res) => {
+  if (!req.session.user) {
+    return res.status(403).send('Zugriff verweigert. Bitte anmelden.');
+  }
   res.sendFile(path.join(__dirname, 'views', 'content.html'));
 });
 
-// Logout-Route zum Abmelden
+// Logout als POST
 app.post('/logout', (req, res) => {
-  req.session.destroy((err) => {
+  req.session.destroy(err => {
     if (err) {
       return res.status(500).send('Fehler beim Abmelden');
     }
-    res.status(200).send('Erfolgreich abgemeldet');
+    res.redirect('/');  // Zurück zur Startseite nach Logout
+  });
+});
+
+// Logout als GET (für einfache Links)
+app.get('/logout', (req, res) => {
+  req.session.destroy(err => {
+    res.redirect('/');
   });
 });
 
